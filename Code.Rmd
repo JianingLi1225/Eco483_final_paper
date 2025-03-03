@@ -1,0 +1,474 @@
+---
+title: "483_code"
+output: html_document
+date: "2025-02-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(ggplot2)
+library(readr)
+library(tidyverse)
+library(effects)
+library(car)
+library(broom)
+library(dplyr)
+```
+
+```{r}
+cleaned_data <- read_csv("/Users/liz/Desktop/ECO483 Final Paper/cleaned_data.csv")
+
+head(cleaned_data)
+
+```
+
+```{r}
+
+# Histogram for K6SUM distribution
+p1 <- ggplot(cleaned_data, aes(x = K6SUM)) +
+  geom_histogram(binwidth = 1, fill = "#1f78b4", color = "white", alpha = 0.8) +
+  labs(title = "Distribution of Psychological Distress Scores",
+       x = "K6 Psychological Distress Score",
+       y = "Number of Individuals") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Bar chart for K6_binary distribution
+p2 <- ggplot(cleaned_data, aes(x = K6_binary, fill = K6_binary)) +
+  geom_bar(alpha = 0.8) +
+  scale_fill_manual(values = c("No Distress" = "#66c2a5", "Distress" = "#fc8d62")) +
+  labs(title = "Prevalence of Psychological Distress",
+       x = "Psychological Distress Category",
+       y = "Number of Individuals") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    plot.title = element_text(size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    legend.position = "none"
+  )
+
+# Print both plots
+p1
+p2
+
+
+```
+
+```{r}
+# Compute the distribution of K6SUM
+cleaned_data %>%
+  count(K6SUM) %>%
+  arrange(K6SUM)
+
+# Compute the distribution of K6_binary
+cleaned_data %>%
+  count(K6_binary)
+
+```
+
+
+```{r}
+
+# Ensure categorical variables
+cleaned_data <- cleaned_data %>%
+  mutate(
+    Income_category = factor(Income_category, levels = c("Low", "Middle", "Upper-Middle", "High")),
+    K6_binary = factor(K6_binary, levels = c("No Distress", "Distress"))
+  )
+
+# Compute distress rate by income category
+income_distress_rates <- cleaned_data %>%
+  group_by(Income_category) %>%
+  summarise(Distress = sum(K6_binary == "Distress"),
+            Total = n(),
+            Rate = Distress / Total)
+
+# Compute percentage distribution of income categories
+income_distribution <- cleaned_data %>%
+  count(Income_category) %>%
+  mutate(Percentage = n / sum(n) * 100,
+         Label = sprintf("%.1f%%", Percentage))  # Format as percentage
+
+# Custom legend labels with income ranges
+legend_labels <- c(
+  "Low income (<$20,000)", 
+  "Middle income ($20,000 - $49,999)", 
+  "Upper-middle income ($50,000 - $99,999)", 
+  "High income ($100,000+)"
+)
+
+# Pie Chart: Income Distribution with Percentage Labels
+p1 <- ggplot(income_distribution, aes(x = "", y = Percentage, fill = Income_category)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = Label), position = position_stack(vjust = 0.5), size = 4, color = "white") +
+  labs(title = "Income Distribution", fill = "Income Category") +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3"),
+                    labels = legend_labels) +
+  theme_void() +
+  theme(legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10))
+
+# Bar Chart: Distress Rate by Income Category
+p2 <- ggplot(income_distress_rates, aes(x = Income_category, y = Rate, fill = Income_category)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +  # Show as percentages
+  labs(title = "Distress Rate by Income Category", y = "Proportion in Distress", x = "Income Group") +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3")) +
+  theme_minimal()
+
+# Display both plots
+p1
+p2
+
+```
+
+```{r}
+
+# Ensure categorical variables
+cleaned_data <- cleaned_data %>%
+  mutate(
+    COVERTYPE = factor(COVERTYPE, levels = c("Private", "Medicaid/Public", "Other Coverage", "Uninsured")),
+    K6_binary = factor(K6_binary, levels = c("No Distress", "Distress"))
+  )
+
+# Compute distress rate by insurance type
+insurance_distress_rates <- cleaned_data %>%
+  group_by(COVERTYPE) %>%
+  summarise(Distress = sum(K6_binary == "Distress"),
+            Total = n(),
+            Rate = Distress / Total)
+
+# Compute percentage distribution of insurance coverage
+insurance_distribution <- cleaned_data %>%
+  count(COVERTYPE) %>%
+  mutate(Percentage = n / sum(n) * 100,
+         Label = sprintf("%.1f%%", Percentage))  # Format as percentage
+
+# Custom legend labels for insurance types
+legend_labels_insurance <- c(
+  "Private", 
+  "Medicaid/Public", 
+  "Uninsured"
+)
+
+# Pie Chart: Insurance Coverage Distribution
+p3 <- ggplot(insurance_distribution, aes(x = "", y = Percentage, fill = COVERTYPE)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = Label), position = position_stack(vjust = 0.5), size = 4, color = "white") +
+  labs(title = "Insurance Coverage Distribution", fill = "Insurance Type") +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3"),
+                    labels = legend_labels_insurance) +
+  theme_void() +
+  theme(legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10))
+
+# Bar Chart: Distress Rate by Insurance Type
+p4 <- ggplot(insurance_distress_rates, aes(x = COVERTYPE, y = Rate, fill = COVERTYPE)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +  # Show as percentages
+  labs(title = "Distress Rate by Insurance Type", y = "Proportion in Distress", x = "Insurance Type") +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3")) +
+  theme_minimal()
+
+# Display both plots
+p3
+p4
+
+
+```
+
+```{r}
+
+# Ensure categorical variables
+cleaned_data <- cleaned_data %>%
+  mutate(
+    MARSTAT = factor(MARSTAT, levels = c("Married", "Widowed", "Divorced", "Separated", "Never Married")),
+    K6_binary = factor(K6_binary, levels = c("No Distress", "Distress"))
+  )
+
+# Compute distress rate by marital status
+marital_distress_rates <- cleaned_data %>%
+  group_by(MARSTAT) %>%
+  summarise(Distress = sum(K6_binary == "Distress"),
+            Total = n(),
+            Rate = Distress / Total)
+
+# Compute percentage distribution of marital status
+marital_distribution <- cleaned_data %>%
+  count(MARSTAT) %>%
+  mutate(Percentage = n / sum(n) * 100,
+         Label = sprintf("%.1f%%", Percentage))  # Format as percentage
+
+# Custom legend labels for marital status
+legend_labels_marstat <- c(
+  "Married", 
+  "Widowed", 
+  "Divorced", 
+  "Separated", 
+  "Never Married"
+)
+
+# Pie Chart: Marital Status Distribution
+p5 <- ggplot(marital_distribution, aes(x = "", y = Percentage, fill = MARSTAT)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = Label), position = position_stack(vjust = 0.5), size = 4, color = "white") +
+  labs(title = "(a) Marital Status Distribution", fill = "Marital Status") +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#ffd92f"),
+                    labels = legend_labels_marstat) +
+  theme_void() +
+  theme(legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10))
+
+# Bar Chart: Distress Rate by Marital Status
+p6 <- ggplot(marital_distress_rates, aes(x = MARSTAT, y = Rate, fill = MARSTAT)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +  # Show as percentages
+  labs(title = "(b) Distress Rate by Marital Status", y = "Proportion in Distress", x = "Marital Status") +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#ffd92f")) +
+  theme_minimal()
+
+# Display both plots
+p5
+p6
+
+```
+
+```{r}
+
+# Ensure categorical variables
+cleaned_data <- cleaned_data %>%
+  mutate(
+    SEX = factor(SEX, levels = c("Male", "Female")),
+    K6_binary = factor(K6_binary, levels = c("No Distress", "Distress"))
+  )
+
+# Compute distress rate by sex
+sex_distress_rates <- cleaned_data %>%
+  group_by(SEX) %>%
+  summarise(Distress = sum(K6_binary == "Distress"),
+            Total = n(),
+            Rate = Distress / Total)
+
+# Compute percentage distribution of sex
+sex_distribution <- cleaned_data %>%
+  count(SEX) %>%
+  mutate(Percentage = n / sum(n) * 100,
+         Label = sprintf("%.1f%%", Percentage))  # Format as percentage
+
+# Custom legend labels for sex
+legend_labels_sex <- c(
+  "Male", 
+  "Female"
+)
+
+# Pie Chart: Sex Distribution
+p7 <- ggplot(sex_distribution, aes(x = "", y = Percentage, fill = SEX)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(aes(label = Label), position = position_stack(vjust = 0.5), size = 4, color = "white") +
+  labs(title = "Sex Distribution", fill = "Sex") +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62"), 
+                    labels = legend_labels_sex) +
+  theme_void() +
+  theme(legend.title = element_text(size = 12),
+        legend.text = element_text(size = 10))
+
+# Bar Chart: Distress Rate by Sex
+p8 <- ggplot(sex_distress_rates, aes(x = SEX, y = Rate, fill = SEX)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +  # Show as percentages
+  labs(title = "Distress Rate by Sex", y = "Proportion in Distress", x = "Sex") +
+  scale_fill_manual(values = c("#66c2a5", "#fc8d62")) +
+  theme_minimal()
+
+# Display both plots
+p7
+p8
+
+```
+
+```{r}
+
+# Ensure ordered factor for income categories
+cleaned_data <- cleaned_data %>%
+  mutate(Income_category = factor(Income_category, 
+                                  levels = c("Low", "Middle", 
+                                             "Upper-Middle", "High")))
+
+# Heatmap 1: Income vs. Insurance Type
+coverage_distribution_income <- cleaned_data %>%
+  group_by(Income_category, COVERTYPE) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Percentage = Count / sum(Count) * 100) %>%
+  arrange(Income_category)
+
+ggplot(coverage_distribution_income, aes(x = Income_category, y = COVERTYPE, fill = Percentage)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), color = "black", size = 3) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(x = "Income Category", y = "Insurance Type", fill = "Percentage") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Heatmap 2: Marital Status vs. Insurance Type
+cleaned_data <- cleaned_data %>%
+  mutate(MARSTAT_CAT = factor(MARSTAT, 
+                              levels = c("Married", "Widowed", 
+                                         "Divorced", "Separated", "Never Married")))
+
+coverage_distribution_marstat <- cleaned_data %>%
+  group_by(MARSTAT_CAT, COVERTYPE) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Percentage = Count / sum(Count) * 100) %>%
+  arrange(MARSTAT_CAT)
+
+ggplot(coverage_distribution_marstat, aes(x = MARSTAT_CAT, y = COVERTYPE, fill = Percentage)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), color = "black", size = 3) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(x = "Marital Status", y = "Insurance Type", fill = "Percentage") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+
+```{r}
+cleaned_data <- cleaned_data %>%
+  mutate(K6_binary = ifelse(K6_binary == "Distress", 1, 0))
+
+# Base model (without interaction terms)
+base_model <- glm(K6_binary ~ Income_category + COVERTYPE + MARSTAT + SEX, 
+                  data = cleaned_data, family = binomial)
+
+# Full model with possible interaction terms
+full_model <- glm(K6_binary ~ Income_category * COVERTYPE + 
+                                 Income_category * MARSTAT + 
+                                 Income_category * SEX +
+                                 COVERTYPE * MARSTAT + 
+                                 COVERTYPE * SEX + 
+                                 MARSTAT * SEX, 
+                  data = cleaned_data, family = binomial)
+
+# Stepwise regression (selecting the best model)
+stepwise_model <- step(base_model, scope = list(lower = base_model, upper = full_model), 
+                       direction = "both", trace = TRUE)
+
+summary(stepwise_model)
+
+```
+
+```{r}
+anova(base_model, stepwise_model, test = "Chisq")
+
+```
+
+```{r}
+vif(stepwise_model)
+```
+
+```{r}
+confint(stepwise_model)
+```
+
+
+```{r}
+# Extract regression coefficients and confidence intervals
+or_df <- tidy(stepwise_model, exponentiate = TRUE, conf.int = TRUE)
+
+# Remove intercept and reorder variables (place interactions last)
+or_df <- or_df %>%
+  filter(term != "(Intercept)") %>%
+  mutate(term = factor(term, levels = rev(term)))  
+
+# Plot logistic regression coefficients (forest plot)
+ggplot(or_df, aes(x = estimate, y = term)) +
+  geom_point(size = 2, color = "#fc8d62") +  
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2, color = "#1f78b4") +  
+  geom_vline(xintercept = 1, linetype = "dashed", color = "gray50") +  
+  labs(title = "Logistic Regression Coefficients (Odds Ratios)",
+       x = "Odds Ratio (OR)",
+       y = "Predictor Variables") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 8),  
+    axis.title = element_text(size = 6),  
+    axis.text = element_text(size = 6),  
+    plot.title = element_text(size = 8, face = "bold")  
+  )
+
+```
+
+
+```{r}
+# Compute interaction effects
+effect_income_insurance <- Effect(c("Income_category", "COVERTYPE"), stepwise_model)
+df_effect <- as.data.frame(effect_income_insurance)
+
+# Plot interaction effects
+ggplot(df_effect, aes(x = Income_category, y = fit, color = COVERTYPE, group = COVERTYPE)) +
+  geom_line(size = 1) +  
+  geom_point(size = 2) +  
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "orange", size = 1) +  
+  facet_wrap(~ COVERTYPE) +  
+  labs(title = "Effect of Income & Insurance on Psychological Distress",
+       x = "Income Category",
+       y = "Predicted Probability of Distress",
+       color = "Insurance Type") +  
+  theme_minimal() +  
+  theme(
+    text = element_text(size = 10),  
+    axis.title = element_text(size = 8),  
+    axis.text = element_text(size = 6),  
+    strip.text = element_text(size = 8, face = "bold"),  
+    legend.title = element_text(size = 8),  
+    legend.text = element_text(size = 8)  
+  )
+
+```
+
+
+```{r}
+# Compute interaction effects
+effect_insurance_marstat <- Effect(c("COVERTYPE", "MARSTAT"), stepwise_model)
+df_effect_marstat <- as.data.frame(effect_insurance_marstat)
+
+# Plot interaction effects
+ggplot(df_effect_marstat, aes(x = MARSTAT, y = fit, color = COVERTYPE, group = COVERTYPE)) +
+  geom_line(size = 1) +  
+  geom_point(size = 2) +  
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "orange", size = 1) +  
+  facet_wrap(~ COVERTYPE) +  
+  labs(title = "Effect of Insurance & Marital Status on Psychological Distress",
+       x = "Marital Status",
+       y = "Predicted Probability of Distress",
+       color = "Insurance Type") +  
+  theme_minimal() +  
+  theme(
+    text = element_text(size = 10),  
+    axis.title = element_text(size = 8),  
+    axis.text = element_text(size = 4),  
+    strip.text = element_text(size = 8, face = "bold"),  
+    legend.title = element_text(size = 8),  
+    legend.text = element_text(size = 8)  
+  )
+
+```
+
+
+

@@ -1,0 +1,493 @@
+---
+title: "The Impact of Health Insurance Type on Psychological Distress"
+subtitle: "Greater Distress Among Publicly Insured While Higher Income and Marital Stability Reduce Risk"
+date-format: long
+format: pdf
+number-sections: true
+toc: true
+bibliography: references.bib
+---
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+library(ggplot2)
+library(readr)
+library(tidyverse)
+library(effects)
+library(car)
+library(broom)
+library(dplyr)
+library(scales)
+
+```
+
+
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+cleaned_data <- read_csv("/Users/liz/Desktop/ECO483 Final Paper/cleaned_data.csv")
+
+```
+
+# Introduction {#sec-Introduction}
+
+Psychological distress is a major public health concern, affecting millions globally. Access to mental health care in the United States largely depends on health insurance type [@gamm2010mental]. Private insurance, typically employer-sponsored or individually purchased, provides broader coverage and better access to specialized mental health services. In contrast, Medicaid, the primary public insurance for low-income individuals, often has limited provider networks, long wait times, and administrative hurdles. Uninsured individuals face even greater barriers to accessing care [@wray2021access].
+
+While research has linked socioeconomic status and healthcare access to mental health, fewer studies have examined how insurance type interacts with income and marital status to influence distress. This study addresses this gap by analyzing the combined effects of health insurance, income level, marital status, and sex while controlling for potential confounders.
+
+Psychological distress is measured using the Kessler-6 (K6) scale, a widely used screening tool ranging from 0 to 24. A score of 13 or higher typically indicates severe distress, but prior research suggests that individuals scoring 6 or above already face moderate mental health challenges [@Prochaska2012]. To capture this, the study classifies individuals with K6 scores of 6 or higher as experiencing distress and constructs a binary outcome variable. The results indicate that individuals with Medicaid or other public insurance report significantly higher distress levels than those with private insurance, with income and marital status moderating this effect.
+
+The paper proceeds as follows: the next section describes the data and methodology, followed by results on summary statistics, regression estimates, and interaction effects. The discussion interprets key findings and policy implications, and the final section concludes with main takeaways and directions for future research.
+
+
+# Data and Methodology {#sec-data}
+
+The dataset used in this study comes from IPUMS MEPS [@IPUMS_MEPS_2024], provided by the IPUMS project at the University of Minnesota. It is based on the 2022 Medical Expenditure Panel Survey (MEPS), which collects detailed data on health status, medical conditions, healthcare utilization, expenditures, and insurance coverage for the U.S. civilian non-institutionalized population.
+
+This study focuses on the 2022 sample, selecting only adults aged 18 and above. The following key variables were chosen:
+
+- **Psychological distress score (K6SUM)**: A continuous measure of non-specific psychological distress over the past 30 days, based on the Kessler-6 (K6) scale, ranging from 0 to 24, with higher scores indicating greater distress. 
+- **Insurance type (COVERTYPE)**: Includes public insurance (Medicaid/Public), private insurance, and uninsured categories. 
+- **Total income (INCTOT)**: The respondent's total annual income before taxes, measured as a continuous variable.  
+- **Marital status (MARSTAT)**: Represents the respondent's legal marital status, including married, widowed, divorced, separated, and never married.  
+- **Sex (SEX)**: Categorizes individuals as male or female based on self-reported gender identity.
+
+ 
+Additionally, two key variables were constructed for analysis:
+
+- **Income category (Income_category)**: Groups individuals into four levels—low income, middle income, upper-middle income, and high income—based on total annual income.  
+- **Psychological distress (K6_binary)**: A binary variable indicating whether an individual experiences psychological distress, where K6SUM ≤ 5 is classified as "No Distress" and K6SUM ≥ 6 as "Distress."
+
+
+Data processing, visualization, and regression analysis were performed using R [@citeR]. 
+
+# Results {#sec-result}
+
+## Data Results
+
+```{r}
+#| echo: false
+#| warning: false
+#| label: fig-psychological-distress-distribution
+#| fig-cap: "Distribution of Psychological Distress Measures"
+#| fig-subcap: [
+#| "Psychological Distress Score Distribution", 
+#| "Proportion of Individuals with Psychological Distress"
+#| ]
+#| layout-ncol: 2
+#| 
+# Histogram for K6SUM distribution
+p1 <- ggplot(cleaned_data, aes(x = K6SUM)) +
+  geom_histogram(binwidth = 1, fill = "#1f78b4", color = "white", alpha = 0.8) +
+  labs(x = "K6 Psychological Distress Score", y = "Number of Individuals") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+# Bar chart for K6_binary distribution
+p2 <- ggplot(cleaned_data, aes(x = K6_binary, fill = K6_binary)) +
+  geom_bar(alpha = 0.8) +
+  scale_fill_manual(values = c("No Distress" = "#66c2a5", "Distress" = "#fc8d62")) +
+  labs(x = "Psychological Distress Category", y = "Number of Individuals") +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 12),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    legend.position = "none"
+  )
+
+# Print both plots
+p1
+p2
+
+```
+
+@fig-psychological-distress-distribution shows the distribution of psychological distress scores and the prevalence of psychological distress in the sample. The left panel presents a histogram of K6 psychological distress scores, which is highly right-skewed, with a large concentration of individuals reporting scores close to zero. The frequency of responses declines as the distress score increases, indicating that severe psychological distress is relatively rare. The right panel classifies individuals into two groups based on a cutoff score of 6: those with a score of 6 or above are categorized as experiencing psychological distress, while those below this threshold are classified as not in distress. Among the 10,823 respondents, 2,213 (20.4%) are classified as experiencing distress, while 8,610 (79.6%) are categorized as not in distress.
+
+```{r}
+#| echo: false
+#| warning: false
+#| label: fig-demographics-distribution
+#| fig-cap: "Demographic Distributions and Their Relationship with Psychological Distress"
+#| fig-subcap: [
+#| "Insurance Coverage Distribution", "Distress Rate by Insurance Type",
+#| "Income Distribution", "Distress Rate by Income",
+#| "Marital Status Distribution", "Distress Rate by Marital Status",
+#| "Sex Distribution", "Distress Rate by Sex"
+#| ]
+#| layout-ncol: 2
+#| layout-nrow: 4
+
+# Ensure categorical variables
+cleaned_data <- cleaned_data %>%
+  mutate(
+    Income_category = factor(Income_category, levels = c("Low", "Middle", "Upper-Middle", "High")),
+    COVERTYPE = factor(COVERTYPE, levels = c("Private", "Medicaid/Public", "Other Coverage", "Uninsured")),
+    MARSTAT = factor(MARSTAT, levels = c("Married", "Widowed", "Divorced", "Separated", "Never Married")),
+    SEX = factor(SEX, levels = c("Male", "Female")),
+    K6_binary = factor(K6_binary, levels = c("No Distress", "Distress"))
+  )
+
+# Compute distributions and distress rates
+compute_distribution <- function(data, variable) {
+  data %>%
+    count(!!sym(variable)) %>%
+    mutate(Percentage = n / sum(n) * 100,
+           Label = sprintf("%.1f%%", Percentage))
+}
+
+compute_distress_rate <- function(data, variable) {
+  data %>%
+    group_by(!!sym(variable)) %>%
+    summarise(Distress = sum(K6_binary == "Distress"),
+              Total = n(),
+              Rate = Distress / Total)
+}
+
+# Generate datasets
+income_distribution <- compute_distribution(cleaned_data, "Income_category")
+insurance_distribution <- compute_distribution(cleaned_data, "COVERTYPE")
+marital_distribution <- compute_distribution(cleaned_data, "MARSTAT")
+sex_distribution <- compute_distribution(cleaned_data, "SEX")
+
+income_distress_rates <- compute_distress_rate(cleaned_data, "Income_category")
+insurance_distress_rates <- compute_distress_rate(cleaned_data, "COVERTYPE")
+marital_distress_rates <- compute_distress_rate(cleaned_data, "MARSTAT")
+sex_distress_rates <- compute_distress_rate(cleaned_data, "SEX")
+
+# Define custom colors
+colors <- c("#66c2a5", "#fc8d62", "#8da0cb", "#e78ac3", "#ffd92f")
+
+# Custom legend labels
+legend_labels_insurance <- c(
+  "Private Health Insurance",
+  "Medicaid or Public Insurance",
+  "Other Insurance Coverage",
+  "Uninsured"
+)
+
+legend_labels_income <- c(
+  "Low Income (<$20,000)",
+  "Middle Income ($20,000 - $49,999)",
+  "Upper-Middle Income ($50,000 - $99,999)",
+  "High Income ($100,000+)"
+)
+
+legend_labels_marital <- c(
+  "Married",
+  "Widowed",
+  "Divorced",
+  "Separated",
+  "Never Married"
+)
+
+legend_labels_sex <- c(
+  "Male",
+  "Female"
+)
+
+# Pie chart function with updated legend title
+plot_pie <- function(data, variable, colors, labels, legend_title) {
+  ggplot(data, aes(x = "", y = Percentage, fill = !!sym(variable))) +
+    geom_bar(stat = "identity", width = 1, color = "white") +
+    coord_polar(theta = "y") +
+    geom_text(aes(label = Label), position = position_stack(vjust = 0.5), size = 4, color = "white") +
+    scale_fill_manual(values = colors, labels = labels) +
+    labs(fill = legend_title) +
+    theme_void() +
+    theme(legend.title = element_text(size = 12),
+          legend.text = element_text(size = 10))
+}
+
+# Bar chart function with labels inside bars
+plot_bar <- function(data, variable, colors, xlabel) {
+  ggplot(data, aes(x = !!sym(variable), y = Rate, fill = !!sym(variable))) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = scales::percent(Rate, accuracy = 0.1)), 
+              position = position_stack(vjust = 0.5),  # Place labels inside bars
+              size = 4, color = "white") +  # Ensure visibility inside colored bars
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    labs(x = xlabel, y = "Proportion") +
+    scale_fill_manual(values = colors) +
+    theme_minimal() +
+    theme(legend.position = "none")
+}
+
+
+
+# Generate plots with updated legend titles and y-axis labels
+
+p1 <- plot_pie(insurance_distribution, "COVERTYPE", colors, legend_labels_insurance, "Health Insurance Type")
+p2 <- plot_bar(insurance_distress_rates, "COVERTYPE", colors, "Health Insurance Type")
+
+p3 <- plot_pie(income_distribution, "Income_category", colors, legend_labels_income, "Income Group")
+p4 <- plot_bar(income_distress_rates, "Income_category", colors, "Income Group")
+
+p5 <- plot_pie(marital_distribution, "MARSTAT", colors, legend_labels_marital, "Marital Status")
+p6 <- plot_bar(marital_distress_rates, "MARSTAT", colors, "Marital Status")
+
+p7 <- plot_pie(sex_distribution, "SEX", colors[1:2], legend_labels_sex, "Sex")
+p8 <- plot_bar(sex_distress_rates, "SEX", colors[1:2], "Sex")
+
+# Display plots
+p1
+p2
+p3
+p4
+p5
+p6
+p7
+p8
+
+```
+
+@fig-demographics-distribution shows the distribution of health insurance type, income level, marital status, and sex in the dataset. The use of both pie charts and bar charts facilitates comparisons across categories, providing insight into variations in psychological distress among different groups.
+
+Private insurance is the most common coverage, accounting for 61.2% of individuals. Medicaid and other public insurance cover 32.3%, while 6.5% fall into other insurance categories. The uninsured population is notably smaller compared to public insurance holders. Psychological distress is highest among those covered by Medicaid or public insurance (26.1%) and lowest among the privately insured (17.8%). The uninsured have a distress rate of 17.0%.
+
+Income distribution is relatively balanced, with low-income (31.8%) and middle-income (31.5%) groups making up the largest shares. Upper-middle-income individuals represent 23.1%, and high-income individuals comprise 13.6%. Psychological distress is most prevalent among the low-income group (28.2%) and decreases with income, reaching 13.9% in the high-income group.
+
+Nearly half of the sample (49.6%) is married, while 23.2% have never married. Divorced individuals make up 15.1%, widowed individuals 10.0%, and separated individuals 2.0%. Psychological distress is highest among separated individuals (32.1%) and lowest among married individuals (16.0%).
+
+The sample contains more females (54.9%) than males (45.1%). Psychological distress is more common among females (22.1%) than males (18.4%).
+
+
+
+
+```{r}
+#| echo: false
+#| warning: false
+#| label: fig-heatmaps-insurance
+#| fig-cap: "Heatmaps of Insurance Coverage"
+#| fig-subcap: [
+#| "By Income Category", "By Marital Status"
+#| ]
+#| layout-ncol: 1
+
+# Ensure ordered factor for income categories
+cleaned_data <- cleaned_data %>%
+  mutate(Income_category = factor(Income_category, 
+                                  levels = c("Low", "Middle", 
+                                             "Upper-Middle", "High")))
+
+# Heatmap 1: Income vs. Insurance Type
+coverage_distribution_income <- cleaned_data %>%
+  group_by(Income_category, COVERTYPE) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Percentage = Count / sum(Count) * 100) %>%
+  arrange(Income_category)
+
+p1 <- ggplot(coverage_distribution_income, aes(x = Income_category, y = COVERTYPE, fill = Percentage)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), color = "black", size = 3) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(x = "Income Category", y = "Insurance Type", fill = "Percentage") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Heatmap 2: Marital Status vs. Insurance Type
+cleaned_data <- cleaned_data %>%
+  mutate(MARSTAT_CAT = factor(MARSTAT, 
+                              levels = c("Married", "Widowed", 
+                                         "Divorced", "Separated", "Never Married")))
+
+coverage_distribution_marstat <- cleaned_data %>%
+  group_by(MARSTAT_CAT, COVERTYPE) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  mutate(Percentage = Count / sum(Count) * 100) %>%
+  arrange(MARSTAT_CAT)
+
+p2 <- ggplot(coverage_distribution_marstat, aes(x = MARSTAT_CAT, y = COVERTYPE, fill = Percentage)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.1f%%", Percentage)), color = "black", size = 3) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(x = "Marital Status", y = "Insurance Type", fill = "Percentage") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Display plots
+p1
+p2
+
+
+```
+
+@fig-heatmaps-insurance examines the relationship between insurance type, income level, and marital status. There are clear differences in insurance coverage across income groups, with lower-income individuals relying more on public insurance, while higher-income individuals predominantly have private insurance. Among low-income individuals, 17.5% are covered by public insurance, 11.3% have private insurance, and 3.0% are uninsured. In the middle-income group, the share of private insurance increases to 18.7%, public insurance decreases to 10.2%, and 2.6% are uninsured. In the high-income group, 19.0% have private insurance, only 1.2% are covered by public insurance, and 0.2% are uninsured. This pattern indicates that as income levels rise, reliance on public insurance declines, while private insurance coverage becomes more prevalent.
+
+Marital status is also associated with insurance type. Among married individuals, private insurance is the most common, covering 35.9%, while 11.2% have public insurance, and 2.5% are uninsured. In contrast, unmarried individuals have a lower share of private insurance (13.1%), with 7.4% relying on public insurance and 2.7% being uninsured. Widowed and divorced individuals have relatively high public insurance coverage rates at 6.0% and 6.8%, respectively, but significantly lower private insurance coverage, at 3.9% and 7.5%. Separated individuals have the lowest private insurance coverage at 0.9%, with public insurance coverage also relatively low. These patterns suggest a strong association between marital status and insurance type, with married individuals being more likely to have private insurance, while unmarried, divorced, or separated individuals are more likely to rely on public insurance or be uninsured.
+
+## Model Results
+
+```{r}
+#| include: false
+#| warning: false
+#| message: false
+
+cleaned_data <- cleaned_data %>%
+  mutate(K6_binary = ifelse(K6_binary == "Distress", 1, 0))
+
+# Base model (without interaction terms)
+base_model <- glm(K6_binary ~ Income_category + COVERTYPE + MARSTAT + SEX, 
+                  data = cleaned_data, family = binomial)
+
+# Full model with possible interaction terms
+full_model <- glm(K6_binary ~ Income_category * COVERTYPE + 
+                                 Income_category * MARSTAT + 
+                                 Income_category * SEX +
+                                 COVERTYPE * MARSTAT + 
+                                 COVERTYPE * SEX + 
+                                 MARSTAT * SEX, 
+                  data = cleaned_data, family = binomial)
+
+# Stepwise regression (selecting the best model)
+stepwise_model <- step(base_model, scope = list(lower = base_model, upper = full_model), 
+                       direction = "both", trace = TRUE)
+
+
+
+```
+
+To analyze the relationship between insurance type and psychological distress, a logistic regression model was constructed. The base model included income category, insurance type, marital status, and sex as independent variables. Stepwise regression was applied to determine the best-fitting model, which retained interactions between income and insurance type, as well as insurance type and marital status. Model fit was evaluated using a chi-square test (χ² = 40.085, p < 0.001), confirming that the inclusion of interaction terms improved explanatory power. Variance Inflation Factor (VIF) values showed no severe multicollinearity, with the highest adjusted GVIF at 2.14 for insurance type.
+
+The model is as follows:
+
+\begin{align}
+\log\left(\frac{P(K6_{\text{binary}} = 1)}{1 - P(K6_{\text{binary}} = 1)}\right) &= \beta_{0} + \beta_{1} \text{IncomeCategory}_i + \beta_{2} \text{COVERTYPE}_i \nonumber \\
+&\quad + \beta_{3} \text{MARSTAT}_i + \beta_{4} \text{SEX}_i + \beta_{5} (\text{IncomeCategory} \times \text{COVERTYPE})_i \nonumber \\
+&\quad + \beta_{6} (\text{COVERTYPE} \times \text{MARSTAT})_i + \epsilon_i \label{eq:logistic_model}
+\end{align}
+
+
+```{r}
+#| echo: false
+#| warning: false
+#| label: fig-logistic-regression-coefficients
+#| fig-cap: "Logistic Regression Coefficients and Confidence Intervals"
+
+# Extract regression coefficients and confidence intervals
+or_df <- tidy(stepwise_model, exponentiate = TRUE, conf.int = TRUE)
+
+# Remove intercept and reorder variables (place interactions last)
+or_df <- or_df %>%
+  filter(term != "(Intercept)") %>%
+  mutate(term = factor(term, levels = rev(term)))  
+
+# Plot logistic regression coefficients (forest plot)
+ggplot(or_df, aes(x = estimate, y = term)) +
+  geom_point(size = 2, color = "#fc8d62") +  
+  geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2, color = "#1f78b4") +  
+  geom_vline(xintercept = 1, linetype = "dashed", color = "gray50") +  
+  labs(x = "Odds Ratio (OR)", y = "Predictor Variables") +  
+  theme_minimal() +
+  theme(
+    text = element_text(size = 8),  
+    axis.title = element_text(size = 6),  
+    axis.text = element_text(size = 6)  
+  )
+
+```
+
+@fig-logistic-regression-coefficients presents the logistic regression coefficients and their 95% confidence intervals, measuring the impact of different variables on psychological distress. Health insurance type has a significant effect on mental health status. Compared to individuals with private insurance, those covered by Medicaid or other public insurance are 63% more likely to experience psychological distress (OR 1.63, 95% CI [1.31, 2.02]). In contrast, the likelihood of distress among uninsured individuals does not differ significantly from those with private insurance.
+
+Higher income levels are associated with lower probabilities of psychological distress. Compared to low-income individuals, those in the middle-income group have a 23% lower likelihood of distress, upper-middle-income individuals have a 32% lower likelihood, and high-income individuals have a 38% lower likelihood. Marital status also plays a role, with separated individuals being 111% more likely to experience distress compared to married individuals, while never-married individuals have a 94% higher probability. Women are 18% more likely to report psychological distress compared to men.
+
+The interaction effects indicate that income level has a stronger influence within the public insurance group. High-income individuals on public insurance are 52% less likely to experience distress compared to low-income individuals. Marital status also interacts with insurance type, as separated individuals without insurance exhibit lower distress probabilities than those with insurance, whereas never-married individuals on public insurance show a reduced likelihood of distress. These findings suggest that the effects of income and marital status on psychological distress vary across different insurance types.
+
+
+To illustrate how insurance type interacts with income and marital status in predicting psychological distress, interaction effects were analyzed, and predicted probability plots were generated. @fig-interaction-income-insurance examines the interaction between income level and insurance type, while @fig-interaction-insurance-marstat focuses on the interaction between marital status and insurance type.
+
+```{r}
+#| echo: false
+#| warning: false
+#| label: fig-interaction-income-insurance
+#| fig-cap: "Interaction Effect of Income and Insurance on Psychological Distress"
+
+# Compute interaction effects
+effect_income_insurance <- Effect(c("Income_category", "COVERTYPE"), stepwise_model)
+df_effect <- as.data.frame(effect_income_insurance)
+
+# Plot interaction effects
+ggplot(df_effect, aes(x = Income_category, y = fit, color = COVERTYPE, group = COVERTYPE)) +
+  geom_line(size = 1) +  
+  geom_point(size = 2) +  
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "orange", size = 1) +  
+  facet_wrap(~ COVERTYPE) +  
+  labs(x = "Income Category", y = "Predicted Probability of Distress", color = "Insurance Type") +  
+  theme_minimal() +  
+  theme(
+    text = element_text(size = 10),  
+    axis.title = element_text(size = 8),  
+    axis.text = element_text(size = 4),  
+    strip.text = element_text(size = 8, face = "bold"),  
+    legend.title = element_text(size = 4),  
+    legend.text = element_text(size = 4)  
+  )
+
+```
+
+@fig-interaction-income-insurance shows that among those with private insurance, the probability of distress decreases as income increases. The decline is more pronounced for individuals covered by Medicaid or public insurance, with low-income individuals experiencing the highest distress probability and a sharp drop as income rises. In contrast, the uninsured group exhibits greater fluctuations across income levels, with wider confidence intervals indicating higher uncertainty.
+
+
+
+```{r}
+#| echo: false
+#| warning: false
+#| label: fig-interaction-insurance-marstat
+#| fig-cap: "Interaction Effect of Insurance and Marital Status on Psychological Distress"
+
+
+# Compute interaction effects
+effect_insurance_marstat <- Effect(c("COVERTYPE", "MARSTAT"), stepwise_model)
+df_effect_marstat <- as.data.frame(effect_insurance_marstat)
+
+# Plot interaction effects
+ggplot(df_effect_marstat, aes(x = MARSTAT, y = fit, color = COVERTYPE, group = COVERTYPE)) +
+  geom_line(size = 1) +  
+  geom_point(size = 2) +  
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2, color = "orange", size = 1) +  
+  facet_wrap(~ COVERTYPE) +  
+  labs(x = "Marital Status", y = "Predicted Probability of Distress", color = "Insurance Type") +  
+  theme_minimal() +  
+  theme(
+    text = element_text(size = 10),  
+    axis.title = element_text(size = 8),  
+    axis.text = element_text(size = 4),  
+    strip.text = element_text(size = 8, face = "bold"),  
+    legend.title = element_text(size = 4),  
+    legend.text = element_text(size = 4)  
+  )
+
+```
+@fig-interaction-insurance-marstat highlights the relationship between marital status and insurance type in predicting distress. Married individuals have the lowest probability of distress across all insurance types. In contrast, divorced, separated, and never-married individuals show significantly higher distress probabilities, especially among those with Medicaid or public insurance. Separated individuals in this group have the highest predicted distress probability. The uninsured group again displays more variability across marital statuses, with wider confidence intervals reflecting greater heterogeneity.
+
+
+# Discussion
+
+This study finds that individuals with public insurance experience higher psychological distress than those with private insurance, while uninsured individuals fall in between. This suggests that public insurance, despite providing essential coverage, may have limitations in mental health support, such as restricted provider access and longer wait times. Expanding mental health coverage, reducing administrative barriers, and increasing the availability of providers within public insurance could help address these gaps.
+Income and marital status moderate this relationship. Low-income individuals with public insurance show the highest distress levels, emphasizing the compounded effects of financial strain and limited healthcare access. Targeted subsidies and community-based mental health programs could provide additional support. Marital status also plays a role, with unmarried, divorced, and separated individuals experiencing greater distress, particularly among those with public insurance. Strengthening social support networks through workplace programs and community services may help mitigate these risks.
+While this study provides key insights, its cross-sectional nature limits causal interpretation. Future research should use longitudinal data to better understand how insurance type affects mental health over time and explore mechanisms such as service availability, treatment costs, and stigma.
+
+
+# Conclusion
+
+
+Health insurance type significantly influences psychological distress, with public insurance recipients facing the highest risk, followed by uninsured individuals, while private insurance offers the most protection. The effect is stronger among low-income and unmarried individuals, highlighting the role of financial and social factors.
+These findings underscore the need for policy measures to improve mental health support within public insurance, particularly for vulnerable populations. Expanding coverage, increasing provider access, and integrating financial and social support could reduce disparities. Future research should examine how specific insurance features impact mental health and explore strategies to enhance care accessibility across demographic groups.
+
+
+\newpage
+
+
+# References
+
+

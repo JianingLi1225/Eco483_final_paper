@@ -1,0 +1,61 @@
+---
+title: "Final_paper_cleaning"
+output: html_document
+date: "2025-02-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r}
+
+raw_data <- read_csv("/Users/liz/Desktop/ECO483 Final Paper/raw_data.csv")
+
+head(raw_data)
+
+```
+
+```{r}
+
+# Remove invalid values
+cleaned_data <- raw_data %>%
+  filter(SEX %in% c(1, 2), 
+         MARSTAT %in% c(10, 20, 30, 40, 50), 
+         COVERTYPE %in% c(1, 2, 3, 4), 
+         !(K6SUM %in% c(96, 98)))  
+
+# Convert categorical variables
+cleaned_data <- cleaned_data %>%
+  mutate(
+    SEX = factor(SEX, levels = c(1, 2), labels = c("Male", "Female")),
+    MARSTAT = factor(MARSTAT, levels = c(10, 20, 30, 40, 50),
+                     labels = c("Married", "Widowed", "Divorced", "Separated", "Never Married")),
+    COVERTYPE = factor(COVERTYPE, levels = c(1, 2, 3, 4),
+                       labels = c("Private", "Medicaid/Public", "Other Coverage", "Uninsured")),
+    Income_category = case_when(
+      INCTOT < 20000 ~ "Low",
+      INCTOT >= 20000 & INCTOT < 50000 ~ "Middle",
+      INCTOT >= 50000 & INCTOT < 100000 ~ "Upper-Middle",
+      INCTOT >= 100000 ~ "High"
+    ) %>% factor(levels = c("Low", "Middle", "Upper-Middle", "High")),
+    
+    K6_binary = case_when(
+      K6SUM >= 0 & K6SUM <= 5 ~ "No Distress",
+      K6SUM >= 6 & K6SUM <= 24 ~ "Distress"
+    ) %>% factor(levels = c("No Distress", "Distress"))
+  )
+
+
+# Save cleaned data
+write_csv(cleaned_data, "/Users/liz/Desktop/ECO483 Final Paper/cleaned_data.csv")
+
+```
+
+
